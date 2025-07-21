@@ -33,7 +33,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   setIsSubmitting(true);
 
   try {
-    const response = await fetch("/api/send-inquiry", {
+    const response = await fetch("https://cosmos-backend-vva8.onrender.com/api/send-inquiry", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(formData),
