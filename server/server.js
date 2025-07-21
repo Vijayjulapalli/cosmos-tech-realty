@@ -3,7 +3,7 @@ require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 
 const express = require("express");
 const cors = require("cors");
-const { Resend } = require("resend");
+const Resend = require("resend").default; // ✅ FIXED: Use default export
 
 const app = express();
 const port = 8081;
@@ -16,7 +16,7 @@ if (!resendApiKey) {
 }
 console.log("✅ RESEND_API_KEY loaded");
 
-const resend = new Resend(resendApiKey);
+const resend = new Resend(resendApiKey); // ✅ Correctly initialized
 
 app.use(cors());
 app.use(express.json());
@@ -40,9 +40,9 @@ app.post("/api/send-inquiry", async (req, res) => {
   } = req.body;
 
   try {
-    // 🔁 1. Email to Admin
+    // ✅ 1. Email to Admin
     const adminResponse = await resend.emails.send({
-      from: "Cosmos Realty <onboarding@resend.dev>", // 🔁 Use your verified domain
+      from: "Cosmos Realty <onboarding@resend.dev>", // ✅ Replace with verified sender if needed
       to: "julapallivijay66@gmail.com",
       subject: "📩 New Property Inquiry",
       html: `
@@ -60,9 +60,9 @@ app.post("/api/send-inquiry", async (req, res) => {
 
     console.log("✅ Admin email result:", adminResponse);
 
-    // 🔁 2. Email to Customer
+    // ✅ 2. Email to Customer
     const customerResponse = await resend.emails.send({
-      from: "Cosmos Realty <onboarding@resend.dev>", // 🔁 Use same verified sender
+      from: "Cosmos Realty <onboarding@resend.dev>",
       to: email,
       subject: "✅ We’ve received your inquiry",
       html: `
