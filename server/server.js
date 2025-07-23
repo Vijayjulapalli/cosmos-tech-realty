@@ -9,13 +9,13 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
+// Load environment variables from .env
 dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 const app = express();
 const port = process.env.PORT || 8081;
 
-// Get credentials from .env
+// ✅ Get credentials from .env
 const user = process.env.EMAIL_USER;
 const pass = process.env.EMAIL_PASS;
 
@@ -24,34 +24,32 @@ if (!user || !pass) {
   process.exit(1);
 }
 
-// ✅ Configure transporter
+// ✅ Configure Nodemailer transporter
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: { user, pass },
 });
 
-// ✅ CORS for deployed frontend
+// ✅ CORS for deployed frontend (Netlify)
 app.use(
   cors({
-    origin: "https://cosmostechreality.netlify.app",
+    origin: "https://cosmostechreality.netlify.app", // replace if domain changes
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
   })
 );
 
-app.use(express.json());
+// ✅ Allow preflight for all routes
+app.options("*", cors());
 
-// ✅ Optional but safe
-app.options("/api/send-inquiry", (req, res) => {
-  res.sendStatus(200);
-});
+app.use(express.json());
 
 // ✅ Health check
 app.get("/", (req, res) => {
   res.send("✅ Backend API is running!");
 });
 
-// ✅ Inquiry submission
+// ✅ Inquiry submission route
 app.post("/api/send-inquiry", async (req, res) => {
   const { name, email, phone, buyOrRent, houseType, area, zipCode, extraInput } = req.body;
 
@@ -93,6 +91,7 @@ app.post("/api/send-inquiry", async (req, res) => {
   }
 });
 
+// ✅ Start server
 app.listen(port, () => {
   console.log(`🚀 Server is running at http://localhost:${port}`);
 });
