@@ -1,5 +1,3 @@
-// server/server.js
-
 import path from "path";
 import express from "express";
 import cors from "cors";
@@ -15,7 +13,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, ".env") });
 
 const app = express();
-const port = 8081;
+const port = process.env.PORT || 8081;
 
 // Get credentials from .env
 const user = process.env.EMAIL_USER;
@@ -26,20 +24,34 @@ if (!user || !pass) {
   process.exit(1);
 }
 
+// ✅ Configure transporter
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: { user, pass },
 });
 
-app.use(cors());
+// ✅ CORS for deployed frontend
+app.use(
+  cors({
+    origin: "https://cosmostechreality.netlify.app",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
+
 app.use(express.json());
 
-// Health check
+// ✅ Optional but safe
+app.options("/api/send-inquiry", (req, res) => {
+  res.sendStatus(200);
+});
+
+// ✅ Health check
 app.get("/", (req, res) => {
   res.send("✅ Backend API is running!");
 });
 
-// Inquiry submission
+// ✅ Inquiry submission
 app.post("/api/send-inquiry", async (req, res) => {
   const { name, email, phone, buyOrRent, houseType, area, zipCode, extraInput } = req.body;
 
@@ -74,7 +86,6 @@ app.post("/api/send-inquiry", async (req, res) => {
   try {
     await transporter.sendMail(adminMail);
     await transporter.sendMail(customerMail);
-
     res.status(200).json({ message: "Emails sent successfully!" });
   } catch (error) {
     console.error("❌ Email error:", error);
