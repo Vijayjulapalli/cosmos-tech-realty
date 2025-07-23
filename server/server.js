@@ -76,7 +76,7 @@ app.post("/api/send-inquiry", async (req, res) => {
     subject: "✅ We've received your inquiry",
     html: `
       <p>Hi ${name},</p>
-      <p>Thanks for contacting Cosmos Tech Realty LLC. We'll get back to you soon,with our nearest local agent</p>
+      <p>Thanks for contacting Cosmos Tech Realty LLC. our nearest agent will contact you ASAP</p>
       <p>Best Regards,<br/>Cosmos Tech Realty Team</p>
     `,
   };
