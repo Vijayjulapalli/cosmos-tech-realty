@@ -83,7 +83,7 @@ const PropertyInquiryForm = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData?.error || "Failed to submit form");
+        throw new Error(errorData?.error || "Failed to submit form try again");
       }
 
       toast({
