@@ -103,7 +103,7 @@ app.post("/api/send-inquiry", async (req, res) => {
     res.status(200).json({ message: "Inquiry sent and saved to Google Sheets." });
   } catch (error) {
     console.error("❌ Error:", error);
-    res.status(500).json({ error: "Failed to send email or save to Sheets" });
+    res.status(500).json({ error: "Failed to send email or save to Sheets because of error" });
   }
 });
 
