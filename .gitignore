@@ -23,4 +23,4 @@ dist-ssr
 *.sln
 *.sw?
 # .gitignore
-server/customerdetails.json.json
+server/customerdetails.json
