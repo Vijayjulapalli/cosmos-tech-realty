@@ -25,28 +25,24 @@ const PropertyInquiryForm = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
   const formatPhoneNumber = (value: string): string => {
     const cleaned = value.replace(/\D/g, '');
     const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
     if (!match) return value;
     
     const parts = [];
-    if (match[1]) parts.push(`(${match[1]}`);
-    if (match[2]) parts.push(`) ${match[2]}`);
-    if (match[3]) parts.push(`-${match[3]}`);
+    if (match[1]) parts.push(match[1]);
+    if (match[2]) parts.push(match[2]);
+    if (match[3]) parts.push(match[3]);
     
-    return parts.join('');
+    return parts.join('-');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Validate required fields
+    // Basic validation
     if (!formData.name || !formData.email || !formData.phone || !formData.buyOrRent) {
       toast({
         title: "Missing required fields",
@@ -58,7 +54,7 @@ const PropertyInquiryForm = () => {
       return;
     }
 
-    // Validate email format
+    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       toast({
@@ -74,16 +70,25 @@ const PropertyInquiryForm = () => {
     try {
       const response = await fetch("https://cosmos-tech-realty.onrender.com/api/submit-inquiry", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          ...formData,
-          phone: formData.phone.replace(/\D/g, '') // Store only digits
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone.replace(/\D/g, ''),
+          buyOrRent: formData.buyOrRent,
+          propertyType: formData.propertyType,
+          location: formData.location,
+          zipCode: formData.zipCode,
+          budget: formData.budget.replace(/[^0-9]/g, ''),
+          message: formData.message
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData?.error || "Failed to submit form try again");
+        throw new Error(errorData.error || 'Failed to submit form');
       }
 
       toast({
@@ -106,7 +111,7 @@ const PropertyInquiryForm = () => {
       });
 
     } catch (error) {
-      console.error("Form submission error:", error);
+      console.error("Submission error:", error);
       toast({
         title: "Submission failed",
         description: error instanceof Error 
@@ -159,7 +164,7 @@ const PropertyInquiryForm = () => {
                     id="name"
                     type="text"
                     value={formData.name}
-                    onChange={(e) => handleInputChange("name", e.target.value)}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
                     placeholder="Enter your full name"
                     required
                     className="border-border focus:ring-accent"
@@ -172,7 +177,7 @@ const PropertyInquiryForm = () => {
                     id="email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
                     placeholder="Enter your email"
                     required
                     className="border-border focus:ring-accent"
@@ -187,9 +192,9 @@ const PropertyInquiryForm = () => {
                     id="phone"
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => handleInputChange("phone", formatPhoneNumber(e.target.value))}
-                    placeholder="(123) 456-7890"
-                    maxLength={14}
+                    onChange={(e) => setFormData({...formData, phone: formatPhoneNumber(e.target.value)})}
+                    placeholder="123-456-7890"
+                    maxLength={12}
                     required
                     className="border-border focus:ring-accent"
                   />
@@ -199,7 +204,7 @@ const PropertyInquiryForm = () => {
                   <Label className="text-primary font-medium">Buy or Rent *</Label>
                   <RadioGroup 
                     value={formData.buyOrRent} 
-                    onValueChange={(value) => handleInputChange("buyOrRent", value)}
+                    onValueChange={(value) => setFormData({...formData, buyOrRent: value})}
                     className="flex gap-6 pt-2"
                     required
                   >
@@ -220,7 +225,7 @@ const PropertyInquiryForm = () => {
                   <Label htmlFor="propertyType" className="text-primary font-medium">Property Type</Label>
                   <Select 
                     value={formData.propertyType} 
-                    onValueChange={(value) => handleInputChange("propertyType", value)}
+                    onValueChange={(value) => setFormData({...formData, propertyType: value})}
                   >
                     <SelectTrigger className="border-border focus:ring-accent">
                       <SelectValue placeholder="Select property type" />
@@ -239,7 +244,7 @@ const PropertyInquiryForm = () => {
                     id="location"
                     type="text"
                     value={formData.location}
-                    onChange={(e) => handleInputChange("location", e.target.value)}
+                    onChange={(e) => setFormData({...formData, location: e.target.value})}
                     placeholder="e.g., Charlotte, Raleigh, Durham"
                     className="border-border focus:ring-accent"
                   />
@@ -253,7 +258,7 @@ const PropertyInquiryForm = () => {
                     id="zipCode"
                     type="text"
                     value={formData.zipCode}
-                    onChange={(e) => handleInputChange("zipCode", e.target.value.replace(/\D/g, '').slice(0, 5))}
+                    onChange={(e) => setFormData({...formData, zipCode: e.target.value.replace(/\D/g, '').slice(0, 5)})}
                     placeholder="Enter 5-digit ZIP"
                     maxLength={5}
                     className="border-border focus:ring-accent"
@@ -266,8 +271,8 @@ const PropertyInquiryForm = () => {
                     id="budget"
                     type="text"
                     value={formData.budget}
-                    onChange={(e) => handleInputChange("budget", e.target.value)}
-                    placeholder="e.g., $300,000 - $400,000"
+                    onChange={(e) => setFormData({...formData, budget: e.target.value.replace(/[^0-9,]/g, '')})}
+                    placeholder="$300,000"
                     className="border-border focus:ring-accent"
                   />
                 </div>
@@ -278,7 +283,7 @@ const PropertyInquiryForm = () => {
                 <Textarea
                   id="message"
                   value={formData.message}
-                  onChange={(e) => handleInputChange("message", e.target.value)}
+                  onChange={(e) => setFormData({...formData, message: e.target.value})}
                   placeholder="Tell us about your specific needs, must-haves, timeline, or other requirements..."
                   rows={4}
                   className="border-border focus:ring-accent resize-none"

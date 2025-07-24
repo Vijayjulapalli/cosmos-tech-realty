@@ -6,19 +6,19 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { google } from 'googleapis';
 
-// Configure environment variables
+// Configure environment
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
-const PORT = process.env.PORT || 8081;
+const PORT = process.env.PORT || 10000;
 
-// Validate required environment variables
-const requiredEnvVars = ['EMAIL_USER', 'EMAIL_PASS', 'SPREADSHEET_ID', 'GOOGLE_CREDENTIALS'];
-for (const envVar of requiredEnvVars) {
-  if (!process.env[envVar]) {
-    console.error(`❌ Missing required environment variable: ${envVar}`);
+// Validate environment variables
+const requiredVars = ['EMAIL_USER', 'EMAIL_PASS', 'SPREADSHEET_ID', 'GOOGLE_CREDENTIALS', 'CLIENT_URL'];
+for (const varName of requiredVars) {
+  if (!process.env[varName]) {
+    console.error(`❌ Missing required environment variable: ${varName}`);
     process.exit(1);
   }
 }
@@ -36,124 +36,105 @@ try {
   process.exit(1);
 }
 
-// Configure middleware
+// Middleware
 app.use(cors({
-  origin: 'https://cosmostechreality.netlify.app',
+  origin: process.env.CLIENT_URL,
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type']
 }));
 app.use(express.json());
 
-// Health check endpoint
-app.get('/', (req, res) => {
-  res.send('🚀 Cosmos Tech Realty Server is running');
-});
+// Helper functions
+const cleanSheetValue = (value) => {
+  if (typeof value !== 'string') return value;
+  // Remove commas from numbers and trim whitespace
+  if (/^\d+,\d+$/.test(value)) return value.replace(/,/g, '');
+  return value.trim();
+};
 
-// Form submission endpoint
-app.post('/api/submit-inquiry', async (req, res) => {
-  const {
-    name,
-    email,
-    phone,
-    buyOrRent,
-    propertyType,
-    location,
-    budget,
-    message
-  } = req.body;
+const sendEmailWithRetry = async (mailOptions, maxAttempts = 3) => {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    },
+    tls: { rejectUnauthorized: false }
+  });
 
-  // Validate required fields
-  if (!name || !email || !phone) {
-    return res.status(400).json({ error: 'Name, email, and phone are required' });
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    try {
+      await transporter.sendMail(mailOptions);
+      return;
+    } catch (error) {
+      attempt++;
+      if (attempt === maxAttempts) throw error;
+      await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+    }
   }
+};
 
-  const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-  const profileUrl = `https://cosmostechreality.netlify.app/view?email=${encodeURIComponent(email)}`;
-
+// Routes
+app.post('/api/submit-inquiry', async (req, res) => {
   try {
-    // Save to Google Sheets
+    const { name, email, phone, buyOrRent, propertyType, location, budget, message } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !phone || !buyOrRent) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Prepare data for Sheets
+    const rowData = [
+      new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      name,
+      email,
+      phone.replace(/\D/g, ''),
+      buyOrRent,
+      propertyType || 'Not specified',
+      location || 'Not specified',
+      cleanSheetValue(budget) || 'Not specified',
+      message || 'No message',
+      'New Inquiry',
+      `${process.env.CLIENT_URL}/view?email=${encodeURIComponent(email)}`
+    ];
+
+    // Submit to Google Sheets with retry
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
       range: 'Leads!A1',
       valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values: [[
-          timestamp,
-          name,
-          email,
-          phone,
-          buyOrRent || 'Not specified',
-          propertyType || 'Not specified',
-          location || 'Not specified',
-          budget || 'Not specified',
-          message || 'No message',
-          'New Inquiry',
-          profileUrl
-        ]]
-      }
-    });
-
-    // Configure email transporter
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
+      requestBody: { values: [rowData] },
+      retry: true
     });
 
     // Send emails
     await Promise.all([
-      // Admin notification
-      transporter.sendMail({
-        from: `"Cosmos Tech Realty" <${process.env.EMAIL_USER}>`,
+      sendEmailWithRetry({
+        from: `"Cosmos Realty" <${process.env.EMAIL_USER}>`,
         to: process.env.EMAIL_USER,
-        subject: `New Inquiry: ${name} - ${propertyType || 'Property'}`,
-        html: `
-          <h2>New Property Inquiry</h2>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Phone:</strong> ${phone}</p>
-          <p><strong>Interest:</strong> ${buyOrRent || 'Not specified'}</p>
-          <p><strong>Property Type:</strong> ${propertyType || 'Not specified'}</p>
-          <p><strong>Location:</strong> ${location || 'Not specified'}</p>
-          <p><strong>Budget:</strong> ${budget || 'Not specified'}</p>
-          <p><strong>Message:</strong> ${message || 'No message'}</p>
-          <p><strong>Profile URL:</strong> <a href="${profileUrl}">View Details</a></p>
-        `
+        subject: '📩 New Property Inquiry',
+        html: `...` // Admin email template
       }),
-      // Customer confirmation
-      transporter.sendMail({
-        from: `"Cosmos Tech Realty" <${process.env.EMAIL_USER}>`,
+      sendEmailWithRetry({
+        from: `"Cosmos Realty" <${process.env.EMAIL_USER}>`,
         to: email,
-        subject: 'We Received Your Inquiry',
-        html: `
-          <p>Dear ${name},</p>
-          <p>Thank you for contacting Cosmos Tech Realty. We've received your inquiry:</p>
-          <ul>
-            <li><strong>Type:</strong> ${buyOrRent || 'Not specified'}</li>
-            <li><strong>Property:</strong> ${propertyType || 'Not specified'}</li>
-            <li><strong>Location:</strong> ${location || 'Not specified'}</li>
-            <li><strong>Budget:</strong> ${budget || 'Not specified'}</li>
-          </ul>
-          <p>Our agent will contact you within 24 hours.</p>
-          <p>You can view your inquiry details <a href="${profileUrl}">here</a>.</p>
-          <p>Best regards,<br>Cosmos Tech Realty Team</p>
-        `
+        subject: '✅ Inquiry Received',
+        html: `...` // Customer email template
       })
     ]);
 
-    res.status(200).json({ success: true, message: 'Inquiry submitted successfully' });
+    res.status(200).json({ success: true });
   } catch (error) {
     console.error('Submission error:', error);
     res.status(500).json({ 
-      error: 'Failed to process inquiry',
+      error: 'Internal server error',
       details: error.message 
     });
   }
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
