@@ -16,10 +16,11 @@ const PropertyInquiryForm = () => {
     email: "",
     phone: "",
     buyOrRent: "",
-    houseType: "",
-    area: "",
+    propertyType: "",
+    location: "",
     zipCode: "",
-    extraInput: ""
+    budget: "",
+    message: ""
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,52 +29,98 @@ const PropertyInquiryForm = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setIsSubmitting(true);
+  const formatPhoneNumber = (value: string): string => {
+    const cleaned = value.replace(/\D/g, '');
+    const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+    if (!match) return value;
+    
+    const parts = [];
+    if (match[1]) parts.push(`(${match[1]}`);
+    if (match[2]) parts.push(`) ${match[2]}`);
+    if (match[3]) parts.push(`-${match[3]}`);
+    
+    return parts.join('');
+  };
 
-  try {
-    const response = await fetch("https://cosmos-tech-realty.onrender.com/api/send-inquiry", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(formData),
-});
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
 
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData?.error || "Server responded with an error");
+    // Validate required fields
+    if (!formData.name || !formData.email || !formData.phone || !formData.buyOrRent) {
+      toast({
+        title: "Missing required fields",
+        description: "Please fill in Name, Email, Phone, and Buy/Rent selection",
+        variant: "destructive",
+        duration: 5000
+      });
+      setIsSubmitting(false);
+      return;
     }
 
-    toast({
-      title: "Thanks for contacting Cosmos Tech Realty LLC!",
-      description: "We’ve received your inquiry. Our agent will reach out to you soon.",
-    });
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast({
+        title: "Invalid email",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+        duration: 5000
+      });
+      setIsSubmitting(false);
+      return;
+    }
 
-    // Reset form only on success
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      buyOrRent: "",
-      houseType: "",
-      area: "",
-      zipCode: "",
-      extraInput: ""
-    });
-  } catch (error) {
-    console.error("Form submission error:", error);
-    toast({
-      title: "Submission failed",
-      description: "Please try again or contact us directly at 86609-13734.",
-      variant: "destructive"
-    });
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+    try {
+      const response = await fetch("https://cosmos-tech-realty.onrender.com/api/submit-inquiry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          phone: formData.phone.replace(/\D/g, '') // Store only digits
+        }),
+      });
 
-  const houseTypes = [
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData?.error || "Failed to submit form");
+      }
+
+      toast({
+        title: "Thank you for your inquiry!",
+        description: "We've received your details and our agent will contact you within 24 hours.",
+        duration: 10000
+      });
+
+      // Reset form
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        buyOrRent: "",
+        propertyType: "",
+        location: "",
+        zipCode: "",
+        budget: "",
+        message: ""
+      });
+
+    } catch (error) {
+      console.error("Form submission error:", error);
+      toast({
+        title: "Submission failed",
+        description: error instanceof Error 
+          ? error.message 
+          : "Please try again or contact us directly at (866) 091-3734",
+        variant: "destructive",
+        duration: 8000
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const propertyTypes = [
     "Single Family Home",
     "Townhouse",
     "Condominium",
@@ -140,8 +187,9 @@ const handleSubmit = async (e: React.FormEvent) => {
                     id="phone"
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                    placeholder="(XXX) XXX-XXXX"
+                    onChange={(e) => handleInputChange("phone", formatPhoneNumber(e.target.value))}
+                    placeholder="(123) 456-7890"
+                    maxLength={14}
                     required
                     className="border-border focus:ring-accent"
                   />
@@ -153,6 +201,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                     value={formData.buyOrRent} 
                     onValueChange={(value) => handleInputChange("buyOrRent", value)}
                     className="flex gap-6 pt-2"
+                    required
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="buy" id="buy" className="border-accent text-accent" />
@@ -168,13 +217,16 @@ const handleSubmit = async (e: React.FormEvent) => {
 
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="houseType" className="text-primary font-medium">House Type</Label>
-                  <Select value={formData.houseType} onValueChange={(value) => handleInputChange("houseType", value)}>
+                  <Label htmlFor="propertyType" className="text-primary font-medium">Property Type</Label>
+                  <Select 
+                    value={formData.propertyType} 
+                    onValueChange={(value) => handleInputChange("propertyType", value)}
+                  >
                     <SelectTrigger className="border-border focus:ring-accent">
-                      <SelectValue placeholder="Select house type" />
+                      <SelectValue placeholder="Select property type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {houseTypes.map((type) => (
+                      {propertyTypes.map((type) => (
                         <SelectItem key={type} value={type}>{type}</SelectItem>
                       ))}
                     </SelectContent>
@@ -182,37 +234,52 @@ const handleSubmit = async (e: React.FormEvent) => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="area" className="text-primary font-medium">Preferred Area</Label>
+                  <Label htmlFor="location" className="text-primary font-medium">Preferred Location</Label>
                   <Input
-                    id="area"
+                    id="location"
                     type="text"
-                    value={formData.area}
-                    onChange={(e) => handleInputChange("area", e.target.value)}
+                    value={formData.location}
+                    onChange={(e) => handleInputChange("location", e.target.value)}
                     placeholder="e.g., Charlotte, Raleigh, Durham"
                     className="border-border focus:ring-accent"
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="zipCode" className="text-primary font-medium">Zip Code</Label>
-                <Input
-                  id="zipCode"
-                  type="text"
-                  value={formData.zipCode}
-                  onChange={(e) => handleInputChange("zipCode", e.target.value)}
-                  placeholder="Enter zip code"
-                  className="border-border focus:ring-accent"
-                />
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="zipCode" className="text-primary font-medium">ZIP Code</Label>
+                  <Input
+                    id="zipCode"
+                    type="text"
+                    value={formData.zipCode}
+                    onChange={(e) => handleInputChange("zipCode", e.target.value.replace(/\D/g, '').slice(0, 5))}
+                    placeholder="Enter 5-digit ZIP"
+                    maxLength={5}
+                    className="border-border focus:ring-accent"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="budget" className="text-primary font-medium">Budget Range</Label>
+                  <Input
+                    id="budget"
+                    type="text"
+                    value={formData.budget}
+                    onChange={(e) => handleInputChange("budget", e.target.value)}
+                    placeholder="e.g., $300,000 - $400,000"
+                    className="border-border focus:ring-accent"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="extraInput" className="text-primary font-medium">Additional Requirements</Label>
+                <Label htmlFor="message" className="text-primary font-medium">Additional Requirements</Label>
                 <Textarea
-                  id="extraInput"
-                  value={formData.extraInput}
-                  onChange={(e) => handleInputChange("extraInput", e.target.value)}
-                  placeholder="Tell us about your specific needs, budget range, timeline, or any other requirements..."
+                  id="message"
+                  value={formData.message}
+                  onChange={(e) => handleInputChange("message", e.target.value)}
+                  placeholder="Tell us about your specific needs, must-haves, timeline, or other requirements..."
                   rows={4}
                   className="border-border focus:ring-accent resize-none"
                 />
@@ -221,7 +288,9 @@ const handleSubmit = async (e: React.FormEvent) => {
               <Button 
                 type="submit" 
                 disabled={isSubmitting}
-                className="w-full bg-accent text-accent-foreground hover:bg-accent/90 text-lg py-6 rounded-full font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50"
+                className={`w-full bg-accent text-accent-foreground hover:bg-accent/90 text-lg py-6 rounded-full font-semibold shadow-lg transition-all duration-300 ${
+                  isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-xl'
+                }`}
               >
                 {isSubmitting ? (
                   <>
