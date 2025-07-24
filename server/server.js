@@ -6,7 +6,6 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { google } from 'googleapis';
 
-// Configure environment
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -23,118 +22,89 @@ for (const varName of requiredVars) {
   }
 }
 
-// Initialize Google Sheets API
-let sheets;
-try {
-  const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  sheets = google.sheets({ version: 'v4', auth });
-} catch (error) {
-  console.error('❌ Google Auth initialization failed:', error.message);
-  process.exit(1);
-}
+// Google Sheets Auth
+const auth = new google.auth.GoogleAuth({
+  credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
+const sheets = google.sheets({ version: 'v4', auth });
 
 // Middleware
 app.use(cors({
   origin: process.env.CLIENT_URL,
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['POST'],
   allowedHeaders: ['Content-Type']
 }));
 app.use(express.json());
 
-// Helper functions
-const cleanSheetValue = (value) => {
-  if (typeof value !== 'string') return value;
-  // Remove commas from numbers and trim whitespace
-  if (/^\d+,\d+$/.test(value)) return value.replace(/,/g, '');
-  return value.trim();
-};
-
-const sendEmailWithRetry = async (mailOptions, maxAttempts = 3) => {
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    },
-    tls: { rejectUnauthorized: false }
-  });
-
-  let attempt = 0;
-  while (attempt < maxAttempts) {
-    try {
-      await transporter.sendMail(mailOptions);
-      return;
-    } catch (error) {
-      attempt++;
-      if (attempt === maxAttempts) throw error;
-      await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
-    }
-  }
-};
-
 // Routes
 app.post('/api/submit-inquiry', async (req, res) => {
   try {
-    const { name, email, phone, buyOrRent, propertyType, location, budget, message } = req.body;
+    const { name, email, phone, buyOrRent, propertyType, location, zipCode, budget, message } = req.body;
 
-    // Validate required fields
     if (!name || !email || !phone || !buyOrRent) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Prepare data for Sheets
+    const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const url = `${process.env.CLIENT_URL}/view?email=${encodeURIComponent(email)}`;
     const rowData = [
-      new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-      name,
-      email,
-      phone.replace(/\D/g, ''),
-      buyOrRent,
-      propertyType || 'Not specified',
-      location || 'Not specified',
-      cleanSheetValue(budget) || 'Not specified',
-      message || 'No message',
-      'New Inquiry',
-      `${process.env.CLIENT_URL}/view?email=${encodeURIComponent(email)}`
+      timestamp, name, email, phone.replace(/\D/g, ''), buyOrRent,
+      propertyType || 'Not specified', location || 'Not specified',
+      budget?.replace(/[^0-9]/g, '') || 'Not specified',
+      message || 'No message', 'New Lead', url
     ];
 
-    // Submit to Google Sheets with retry
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
       range: 'Leads!A1',
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [rowData] },
-      retry: true
+      requestBody: { values: [rowData] }
     });
 
     // Send emails
-    await Promise.all([
-      sendEmailWithRetry({
-        from: `"Cosmos Realty" <${process.env.EMAIL_USER}>`,
-        to: process.env.EMAIL_USER,
-        subject: '📩 New Property Inquiry',
-        html: `...` // Admin email template
-      }),
-      sendEmailWithRetry({
-        from: `"Cosmos Realty" <${process.env.EMAIL_USER}>`,
-        to: email,
-        subject: '✅ Inquiry Received',
-        html: `...` // Customer email template
-      })
-    ]);
-
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Submission error:', error);
-    res.status(500).json({ 
-      error: 'Internal server error',
-      details: error.message 
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
     });
+
+    const adminEmail = {
+      from: `"Cosmos Realty" <${process.env.EMAIL_USER}>`,
+      to: process.env.EMAIL_USER,
+      subject: '📩 New Property Inquiry',
+      html: `<p><strong>Name:</strong> ${name}</p>
+             <p><strong>Email:</strong> ${email}</p>
+             <p><strong>Phone:</strong> ${phone}</p>
+             <p><strong>Type:</strong> ${buyOrRent}</p>
+             <p><strong>Property:</strong> ${propertyType}</p>
+             <p><strong>Location:</strong> ${location}</p>
+             <p><strong>ZIP:</strong> ${zipCode}</p>
+             <p><strong>Budget:</strong> ${budget}</p>
+             <p><strong>Message:</strong> ${message}</p>`
+    };
+
+    const customerEmail = {
+      from: `"Cosmos Realty" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "✅ We've received your inquiry",
+      html: `<p>Hi ${name},</p>
+             <p>Thanks for contacting Cosmos Tech Realty. We'll be in touch soon.</p>`
+    };
+
+    await transporter.sendMail(adminEmail);
+    await transporter.sendMail(customerEmail);
+
+    res.status(200).json({ message: 'Inquiry submitted successfully' });
+  } catch (error) {
+    console.error('❌ Submission failed:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 });
 
+// Start
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
