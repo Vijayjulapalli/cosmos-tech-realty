@@ -22,4 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+<<<<<<< HEAD
 echo "cosmos-key.json" >> .gitignore
+=======
+
+cosmos-key.json 
+>>>>>>> e5399d559a76d8480139a94047de52226bf28242
